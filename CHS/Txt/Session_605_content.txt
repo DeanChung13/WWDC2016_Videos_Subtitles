@@ -1,0 +1,1031 @@
+<c.green>Metal的新特性
+<c.green>欢迎大家的到来
+<c.green>这是Metal的新特性的第二场演讲
+<c.green>我叫Charles Brissart<c.green>是GPU软件工程师
+<c.green>参加这场演讲的还有我的同事<c.green>Dan Omachi和Ana Tikhonova
+<c.green>我要谈一下Metal的一些新特性
+<c.green>但首先 让我们先回顾一下 WWDC<c.green>关于Metal的第一场演讲
+<c.green>我把这前两场演讲称作采用Metal
+<c.green>公开了Metal的一些基本概念
+<c.green>以及一些更先进的想法
+<c.green>Metal的新特性演讲<c.green>展示了我们的新特性
+<c.green>最后 高级影子优化演讲
+<c.green>将说明如何在不使用<c.green>着色器的情况下获得最佳性能
+<c.green>今天早上 你们了解了曲面细分、
+<c.green>资源堆、无记忆渲染目标
+<c.green>以及一些GPU工具的改善
+<c.green>今天下午 我们将讨论专用函数、
+<c.green>资源读写函数、广颜色范围、<c.green>纹理资源
+<c.green>以及Metal性能着色器的<c.green>一些新增功能
+<c.green>好了 我们先讲一下专用函数
+<c.green>它是渲染引擎中的一种常见模式
+<c.green>用于定义一些复杂的主要函数
+<c.green>并用这些主要函数
+<c.green>生成最少的专用简单函数
+<c.green>理念是主要函数可以防止复制卡
+<c.green>而专用函数由于性能的提高<c.green>变得更简单
+<c.green>让我们看一个例子
+<c.green>假如我们正在写一个材料函数
+<c.green>你要写一个主要函数
+<c.green>来执行你可能要用到的<c.green>所有材料的各个方面
+<c.green>但是 假如你正在实施一种<c.green>亮晶晶的材料
+<c.green>很可能就不需要反射了<c.green>但你一定需要镜面高光
+<c.green>假如你在另一方面实施了<c.green>一种反射材料
+<c.green>你就要给镜面高光材料也添加反射
+<c.green>过度材料需要次表面散射
+<c.green>但很可能不需要反射<c.green>也不需要镜面高光
+<c.green>诸如此类 你们了解的
+<c.green>因此<c.green>一般都是通过预处理宏来实施
+<c.green>主要函数由一组值进行编译
+<c.green>使宏创建专用函数
+<c.green>这可以在运行时实现<c.green>但费用很高
+<c.green>你还可以试试预编译
+<c.green>预编译函数的每一个变体
+<c.green>并把它们存储在Metal中
+<c.green>但这需要大量的存储空间
+<c.green>因为可能会有很多变体
+<c.green>或者也许你不知道你需要哪个变体
+<c.green>另一种方法是使用动态常量
+<c.green>动态常量会防止重新编译函数
+<c.green>然而
+<c.green>你需要在运行时评估常量的值
+<c.green>那会影响着色器的性能
+<c.green>所以 我们提出了一种创建<c.green>专用函数的新方法
+<c.green>就是用一个叫函数常量的东西
+<c.green>函数常量是一种在Metal着色语言中
+<c.green>直接定义的常量
+<c.green>可编译到IR并存储在Metal库中
+<c.green>运行时可提供常量的值
+<c.green>创建一个专用函数
+<c.green>这种方法的优点是
+<c.green>可以离线编译主要函数
+<c.green>并把它存在Metal库中
+<c.green>只需要很少的存储空间
+<c.green>因为你只需要存储主要函数
+<c.green>因为我们在创建专用函数时<c.green>运行了快速优化遍数
+<c.green>你仍然能得到最佳性能
+<c.green>让我们来看个例子
+<c.green>这是个用了预处理宏的主要函数
+<c.green>当然 这个例子很简单
+<c.green>实际上主函数会更加复杂
+<c.green>正如你所看到的 代码的不同部分
+<c.green>都被what if语句包围着
+<c.green>所以你可以消除代码的那个部分
+<c.green>这是带函数常量的代码
+<c.green>你可以看到 我们正在顶部<c.green>定义一些常量
+<c.green>我们将在代码中使用这些常量
+<c.green>要定义常量 就要用到常量关键字
+<c.green>然后是类型<c.green>在这个例子中是布尔型
+<c.green>最后是常量的名称<c.green>以及函数常量的属性
+<c.green>函数常量属性指定了常量的值
+<c.green>不会在编译时提供
+<c.green>但会在运行中提供<c.green>就是当我们创建专用函数的时候
+<c.green>你还应该注意到<c.green>我们正在传递一个索引
+<c.green>当我们在运行中创建专用函数时
+<c.green>除名称之外 索引也可以
+<c.green>识别常量
+<c.green>然后 你就可以在代码中的<c.green>任意地方使用这些常量了
+<c.green>就像使用普通常量一样
+<c.green>这里我们有一个简单的if语句
+<c.green>用来限制部分代码
+<c.green>一旦创建了主要函数
+<c.green>并把它编译和存储在Metal库中
+<c.green>你需要在运行时创建专用函数
+<c.green>所以你需要提供常量值
+<c.green>要提供常量值<c.green>我们就要用一个MTL函数常量值对象
+<c.green>来解决多常量的值的问题
+<c.green>一旦建好了对象
+<c.green>就可以按名称、按索引或按名称
+<c.green>来设置常量的值
+<c.green>一旦创建了对象
+<c.green>我们就能用库中的名称和常量
+<c.green>创建专用函数
+<c.green>简单地编码新函数
+<c.green>提供主要函数的名称<c.green>以及我们刚填好的值
+<c.green>这将返回一个常规的MTL函数<c.green>可以用于创建
+<c.green>计算管道或渲染管道<c.green>取决于函数类型
+<c.green>为了让你们更好地理解<c.green>让我们看一下编译管道
+<c.green>在构建时
+<c.green>用了主要函数源代码<c.green>编译并存储到Metal库中
+<c.green>在运行时 加载了Metal库<c.green>创建了一个新函数
+<c.green>并用MTL函数常量值<c.green>使函数特化
+<c.green>此时此刻 我们要运行一些优化
+<c.green>来剔除不再使用的代码
+<c.green>然后有一个内函数 可以用来
+<c.green>创建一个渲染管道或计算管道
+<c.green>你可以声明Metal所支持的任何<c.green>标量或矢量类型的常量
+<c.green>其中有float、half、<c.green>int、uint等等
+<c.green>在这里 我们定义half4颜色
+<c.green>你还可以用函数常量的值<c.green>创建中间常量
+<c.green>在这里我们定义一个布尔常量
+<c.green>跟函数常量a的值相反
+<c.green>这里我们正在计算一个值
+<c.green>是基于值函数常量的值
+<c.green>我们还有可选常量
+<c.green>可选常量是不需要在特化函数时
+<c.green>一直提供值的常量
+<c.green>这跟在代码中<c.green>ifdef的作用完全一样
+<c.green>当使用预处理宏时
+<c.green>要实现此功能<c.green>就要用if函数内建的常量
+<c.green>如果已提供了值 它将返回真
+<c.green>反之则返回假
+<c.green>你还可以用函数常量向函数中<c.green>添加或从函数中移除参数
+<c.green>这有利于确定不需要绑定的<c.green>缓冲区或纹理
+<c.green>如果你已经知道不会用到它的话
+<c.green>还有利于替换参数类型
+<c.green>稍后再详细介绍
+<c.green>这里有个例子
+<c.green>这是一个顶点函数 可以执行
+<c.green>剥皮<c.green>取决于doSkinning常量的值
+<c.green>函数的第一个参数是矩阵缓冲区<c.green>是否存在
+<c.green>取决于doSkinning常量真假
+<c.green>我们用函数常量参数限制<c.green>那个参数为可选参数
+<c.green>在代码中<c.green>仍然需要使用相同的函数常量
+<c.green>来保护在参数中使用的代码
+<c.green>那么我们在if语句中<c.green>用了doSkinning
+<c.green>然后就能在代码中<c.green>安全地使用矩阵了
+<c.green>你也可以用函数常量
+<c.green>从阶段结构中移除参数
+<c.green>在这里 我们有两个颜色参数
+<c.green>float4型的第一个颜色参数<c.green>作为一个属性
+<c.green>这是属性1
+<c.green>第二个是精确度低的颜色
+<c.green>是一种精度不高的颜色half4
+<c.green>但覆盖了同样的属性索引
+<c.green>你可以任选其一
+<c.green>这些专用于在代码中
+<c.green>变更颜色属性的类型
+<c.green>函数常量有一些限制
+<c.green>比如 不能在内存中真正<c.green>变更结构的布局
+<c.green>这可能成为一个问题<c.green>因为你可能想用
+<c.green>不同的常量定义<c.green>不同的着色器等等
+<c.green>但你可以迂回解决
+<c.green>可以添加不同类型的多个参数
+<c.green>那么在这个例子中<c.green>我们有两个缓冲参数
+<c.green>都使用缓冲索引1
+<c.green>它们受函数常量的约束<c.green>使用常量A和常量B
+<c.green>一般选择其中一个
+<c.green>请注意 我们...
+<c.green>我们用了一个中间常量<c.green>与第一个常量相反
+<c.green>确保在给定时间内<c.green>只存在一个参数
+<c.green>总的来说
+<c.green>你可在运行时用函数常量创建专用函数
+<c.green>无需前台编译
+<c.green>因为我们只是使用...
+<c.green>并且只用快速优化相来移除<c.green>不再使用的代码
+<c.green>存储量很小
+<c.green>因为你只需要在库中<c.green>存储主要函数
+<c.green>你不必发行源代码<c.green>可以只发行IR
+<c.green>最后 移除不再使用的代码
+<c.green>会提供最佳性能
+<c.green>现在<c.green>让我们谈一谈资源读写函数
+<c.green>我们要介绍两个新特性
+<c.green>缓冲区读写函数和纹理读写函数
+<c.green>缓冲区读写函数是从任何函数类型中
+<c.green>读入和写入缓冲区
+<c.green>以及从任何函数类型中
+<c.green>在缓冲区上使用原子操作
+<c.green>你可能猜想纹理读写函数
+<c.green>是从任何函数类型中<c.green>读入和写入纹理
+<c.green>缓冲区读写函数
+<c.green>在配有A9处理器的iOS<c.green>和macOS上都可用
+<c.green>纹理读写函数在macOS上可用
+<c.green>现在让我们讲一下<c.green>缓冲区读写函数
+<c.green>有哪些新特性呢？
+<c.green>新特性就是能从分段函数<c.green>向缓冲区写入
+<c.green>以及在文本和分段函数中<c.green>使用原子操作
+<c.green>这些可用于执行像顺序无关透明、
+<c.green>创建影响指定瓷砖灯光的列表
+<c.green>或只是调试着色器这样的事上
+<c.green>让我们看一个简单的例子
+<c.green>比如说 我们想写出正在渲染的<c.green>可见片段的位置
+<c.green>应该是这样的
+<c.green>有一个分段函数<c.green>我们向它传递了一个输出缓冲区
+<c.green>输出缓冲区就是我们要储存<c.green>片段位置的地方
+<c.green>然后有个计数器
+<c.green>这是另一个缓冲区<c.green>我们开始插入原子
+<c.green>找到位置并放入第一个缓冲区
+<c.green>就是我们要写入的缓冲区
+<c.green>然后 我们可以用原子预制
+<c.green>计算已经写入的片段数量
+<c.green>并在缓冲区生成一个索引
+<c.green>然后把片段的位置写入缓冲区
+<c.green>看起来还不错 但是...
+<c.green>有个小问题
+<c.green>当写入缓冲区时<c.green>深度测试和模板测试
+<c.green>实际上总是在片段着色器之后进行
+<c.green>这是个问题
+<c.green>因为我们仍然会给缓冲区<c.green>分配权限
+<c.green>这并不是我们想要的<c.green>我们只想使片段可见
+<c.green>这也是需要注意的<c.green>因为它会影响你的性能
+<c.green>这意味着<c.green>我们没有做任何早期的Z优化
+<c.green>所以很可能会在不想展示<c.green>片段着色器时展示它
+<c.green>幸运的是 我们有个新特性<c.green>限定词早期片段测试
+<c.green>用于强制在片段着色器之前执行
+<c.green>深度测试和模板测试
+<c.green>结果是 如果深度测试失败
+<c.green>我们将跳过片段着色器的执行
+<c.green>因此不会写入缓冲区
+<c.green>这正是我们所需要的
+<c.green>到达最后一个带早期片段
+<c.green>测试属性的函数
+<c.green>否则只当片段可见时
+<c.green>执行函数
+<c.green>现在让我们谈谈纹理读写函数
+<c.green>新特性是可以从定点函数
+<c.green>和分段函数中创建纹理
+<c.green>以及从单一函数读入<c.green>和写入纹理
+<c.green>可以用于 比如说
+<c.green>在执行后置处理效果时<c.green>节约内存
+<c.green>通过在输入和输出中<c.green>使用同一种纹理
+<c.green>写入纹理是非常简单的
+<c.green>你只需要把纹理定义为<c.green>访问限制符写入
+<c.green>就可以写入纹理了
+<c.green>读写纹理
+<c.green>是一种能在着色器中<c.green>读和写的纹理
+<c.green>只支持数量有限的几个格式
+<c.green>要使用读写纹理
+<c.green>就要使用读写的访问限制符
+<c.green>然后你就可以在着色器中<c.green>读入并写入纹理了
+<c.green>然而 写入纹理时得注意一下
+<c.green>如果你想在着色器中再次<c.green>读到相同的像素
+<c.green>在这个例子中<c.green>你需要使用纹理栅栏
+<c.green>纹理栅栏会确保把写入<c.green>交付给内存
+<c.green>这样就能读取正确的值
+<c.green>在这里 我们写入一个给定的像素
+<c.green>然后 我们使用纹理栅栏<c.green>确保可以再次读取那个值
+<c.green>再然后 我们最终读到了值
+<c.green>我们也应该注意纹理栅栏
+<c.green>因为它们只能在<c.green>单一SIMD线程上应用
+<c.green>意思就是<c.green>如果有两个正在写入纹理的线程
+<c.green>并且第二个线程
+<c.green>正在读取由第一个线程写入的值
+<c.green>就算在纹理栅栏之后读取<c.green>也不能读到
+<c.green>能读到的情况是每个线程
+<c.green>读取被各自写入的像素值
+<c.green>而不能读取由其他线程写入的值
+<c.green>这是关于读取的一个小贴士
+<c.green>我们谈了很多写入缓冲区和纹理
+<c.green>你应该注意顶点函数和分段函数
+<c.green>在这个例子中<c.green>分段函数正写入一个缓冲区
+<c.green>而顶点函数正读取结果
+<c.green>但是这并不能成功<c.green>因为它们的RenderCommandEncoder相同
+<c.green>要解决这个问题<c.green>需要使用两个RenderCommandEncoder
+<c.green>分段函数写入第一个<c.green>RenderCommandEncoder中的缓冲区
+<c.green>而顶点函数写入第二个<c.green>RenderCommandEncoder中的缓冲区
+<c.green>最终读取并获得正确的结果
+<c.green>要注意的是<c.green>没有必要使用计算着色器
+<c.green>可以在同一个计算<c.green>CommandEncoder中实现
+<c.green>总之 我们引入了两个新函数
+<c.green>缓冲区读写函数和纹理读写函数
+<c.green>可以用早期片段测试
+<c.green>来确保在执行片段着色器之前
+<c.green>完成深度测试和模具测试
+<c.green>要从一直在写入的读写纹理中读取数据
+<c.green>应该使用纹理栅栏
+<c.green>最后 用顶点着色器和片段着色器<c.green>写入缓冲区时
+<c.green>就要使用不同的<c.green>RenderCommandEncoder
+<c.green>要读取结果
+<c.green>接下来<c.green>我要把舞台交给Dan Omachi
+<c.green>他会跟大家谈一谈广颜色范围
+<c.green>谢谢Charles
+<c.green>Charles说过了<c.green>我叫Dan Omachi
+<c.green>我是Apple GPU软件架构团队<c.green>的一名工程师
+<c.green>我想先从色彩管理谈起
+<c.green>实际上 这并不是一个<c.green>所有开发人员都熟悉的话题
+<c.green>如果你是个美工
+<c.green>无论是为游戏创建资源的纹理美工
+<c.green>还是编辑照片的摄影师
+<c.green>你心里都会有一个特殊的色系
+<c.green>你会很认真地挑选颜色
+<c.green>并且要保持一致性
+<c.green>无论内容会在哪种<c.green>显示屏上显示
+<c.green>作为开发者和软件工程师<c.green>我们有责任
+<c.green>保证这种一致性
+<c.green>如果你正用一种高层框架
+<c.green>比如SceneKit、<c.green>SpriteKit或核心图像
+<c.green>那么大部分工作已经完成了
+<c.green>应用开发人员不需要<c.green>再考虑一致性的问题了
+<c.green>然而<c.green>Metal是一个层级低得多的API
+<c.green>这就会提供强化的性能和一些灵活性
+<c.green>但也会把其中一些责任转到你身上
+<c.green>为什么呢？
+<c.green>很多年前 你就已经能用<c.green>Apple设备上的
+<c.green>不同色彩空间的不同显示屏了
+<c.green>嗯 去年年底<c.green>Apple引入了几台iMacs
+<c.green>它的显示屏能在<c.green>P3色彩空间渲染颜色
+<c.green>今年四月我们引入了<c.green>9.7英寸的iPad Pro
+<c.green>也有一个P3显示屏
+<c.green>那么 什么是P3色彩空间呢？
+<c.green>嗯 这是一个色度图
+<c.green>从概念上讲<c.green>这个图呈现了可见光谱中的所有颜色
+<c.green>换句话说<c.green>就是普通人肉眼可见的所有颜色
+<c.green>虽然如此 这个三角形内的色彩
+<c.green>是一个标准的sRGB显示屏<c.green>所能呈现的色彩
+<c.green>P3显示屏可以呈现
+<c.green>色度更宽的色彩
+<c.green>这是它在macOS上的应用
+<c.green>我们希望你能在任何<c.green>色彩空间进行渲染
+<c.green>而且我也提到了<c.green>高层框架会处理这个
+<c.green>色彩管理的问题
+<c.green>通过执行一种<c.green>叫做颜色匹配的运算实现
+<c.green>颜色和色彩空间
+<c.green>与显示屏的色彩空间相匹配
+<c.green>这样就能在显示屏上<c.green>得到相同的亮度
+<c.green>不管你正在处理的色彩空间
+<c.green>是否显示
+<c.green>Metal视图默认没有色彩管理
+<c.green>跳过了这个颜色匹配运算
+<c.green>这一般会强化性能
+<c.green>因此 默认情况是
+<c.green>忽略显示屏的颜色配置文件
+<c.green>因此 显示屏会在自己的色彩空间
+<c.green>解释颜色
+<c.green>意思就是 sRGB颜色
+<c.green>会被解释为P3颜色
+<c.green>而两者之间的渲染将会不一致
+<c.green>如果这是你的应用 带sRGB绘制
+<c.green>这是显示屏
+<c.green>嗯 当调用当前的绘制时<c.green>这些颜色会变得更饱和
+<c.green>为什么会这样呢？
+<c.green>让我们再回去看色度图
+<c.green>这是你能在sRGB色彩空间中
+<c.green>呈现的最绿的颜色
+<c.green>在片段着色器中
+<c.green>应该呈现为红色通道为0.0
+<c.green>绿色通道为1.0<c.green>而蓝色通道为0.0
+<c.green>嗯 P3显示屏只取原始值
+<c.green>并做出解释
+<c.green>从根本上说<c.green>它认为那是一个P3颜色
+<c.green>所以你得到的是一个<c.green>最绿的P3显示颜色
+<c.green>对于内容创作应用来说
+<c.green>碰巧是一个不同的绿色
+<c.green>把这个搞清楚相当重要
+<c.green>因为美工们经过深思熟虑
+<c.green>来渲染色彩
+<c.green>对于游戏来说 效果更微妙
+<c.green>但如果设计师和美工
+<c.green>正在寻找这种黑暗的主题
+<c.green>他们一定会非常失望<c.green>因为 看起来要愉快得多
+<c.green>当你在P3显示屏中插入它时
+<c.green>同时 这个问题可能会更糟糕
+<c.green>因为产业正在朝更宽的<c.green>色域显示屏前进
+<c.green>解决方案真的很简单
+<c.green>在NSWindow或CAMetal上<c.green>启动色彩管理
+<c.green>把色彩空间设置为<c.green>你正在使用的色彩空间
+<c.green>很可能是sRGB色彩空间
+<c.green>这会使OS执行颜色匹配
+<c.green>作为它的窗口服务器的<c.green>常规影像合成传输的一部分
+<c.green>那么 如果这是你的显示屏
+<c.green>抱歉 这是带sRGB绘制的应用
+<c.green>这是显示屏
+<c.green>当你调用当前绘制时<c.green>窗口服务器会取走你的绘制
+<c.green>并在把它拍到玻璃上之前<c.green>执行颜色匹配
+<c.green>好了 那么现在<c.green>你已经获得了一致性
+<c.green>如果你想采用范围更广的颜色<c.green>会怎么样呢？
+<c.green>你想有目的地渲染<c.green>那些更强烈的色彩
+<c.green>广色域显示屏只能渲染
+<c.green>嗯 首先 你需要创建一些内容
+<c.green>你需要让美工<c.green>创建范围更广的内容
+<c.green>为此 我们建议使用
+<c.green>扩展范围的sRGB色彩空间
+<c.green>这就允许不能在范围更广的<c.green>颜色中使用的现有资源
+<c.green>能继续正常使用
+<c.green>而着色器管道<c.green>不必执行任何额外操作
+<c.green>然而 美工可以创建
+<c.green>新的范围更宽的色彩资源
+<c.green>可提供更强的色彩
+<c.green>那么<c.green>到底什么是扩展范围sRGB呢？
+<c.green>嗯 这是sRGB三角<c.green>而这是P3三角
+<c.green>扩展范围sRGB
+<c.green>会在各个方位超出无穷大
+<c.green>意思是在着色器中<c.green>超出0到1的值
+<c.green>代表只能查看的值
+<c.green>在比sRGB色彩显示屏<c.green>更广的色彩显示屏上
+<c.green>我提到了超出0到1的值
+<c.green>意思就是<c.green>你需要使用浮点像素格式
+<c.green>来表达这些值
+<c.green>对于纹理源 我们有一些格式建议
+<c.green>你可以使用BC6H浮点格式
+<c.green>这是一种<c.green>提供高性能的压缩格式
+<c.green>以及二进制浮点格式<c.green>和分享指数格式
+<c.green>对于渲染目标<c.green>可以使用二进制浮点格式
+<c.green>或RGBA半浮点格式
+<c.green>指定更强烈的颜色
+<c.green>iOS上的色彩管理比较简单
+<c.green>你总是在sRGB色彩空间中<c.green>进行渲染
+<c.green>即使目标是P3显示屏也一样
+<c.green>颜色是自动匹配的<c.green>没有性能损失
+<c.green>如果你想使用范围更广的颜色
+<c.green>你可以用一些原本就可以
+<c.green>被显示屏读取的新像素格式
+<c.green>并不需要任何影像合成运算
+<c.green>它们可以进行伽马编码<c.green>提供效果更好的黑色
+<c.green>并允许你在着色器中<c.green>进行线性混合
+<c.green>并且它们作为纹理源<c.green>是很有效率的
+<c.green>好了 这是新格式的位元布局
+<c.green>有一个32位元的RGB格式<c.green>每种通道10个位元
+<c.green>还有一个RGBA格式
+<c.green>每种通道10个位元<c.green>扩展到了64个位元
+<c.green>现在 这个10位元的值是...
+<c.green>它们可以用<c.green>超出0到1之间的值来表达
+<c.green>从0到384的值表示负值
+<c.green>往后的510个值 从384到894
+<c.green>代表0和1之间的值
+<c.green>而大于894的值代表<c.green>这些更强烈的值
+<c.green>请注意 RGBA像素格式
+<c.green>比RGB格式大两倍
+<c.green>因此也会占用两倍的内存
+<c.green>并占用两倍的带宽
+<c.green>一般来说 我们建议
+<c.green>只在CAMetal层中使用
+<c.green>如果你需要不透明度的话
+<c.green>那么你决定要创建一些<c.green>广色域的内容
+<c.green>该如何实现呢？<c.green>嗯 你有一个美工
+<c.green>作者在macOS上使用<c.green>支持P3色彩空间的图片编辑器
+<c.green>比如Adobe Photoshop
+<c.green>你可使用显示屏的P3色彩配置文件<c.green>把图片保存为每个通道
+<c.green>16个位元的PNG或JPEG
+<c.green>得到这个图片后<c.green>要如何创建纹理呢？
+<c.green>有两种解决方案
+<c.green>第一种是<c.green>创建自己的资源调节工具
+<c.green>使用每个通道16位元的<c.green>适应P3显示模式的图片实现
+<c.green>你可以通过使用ImageIO
+<c.green>或vImage框架的
+<c.green>扩展sRGB浮点色彩<c.green>空间进行转换
+<c.green>然后在macOS上 你可以转换为
+<c.green>我之前提到过的<c.green>浮点像素格式中的一种
+<c.green>在iOS上 你可以转换为
+<c.green>我刚提到的那些<c.green>扩展范围像素格式中的一种
+<c.green>好了 这是方案一
+<c.green>明确纹理创建的控制
+<c.green>下一个方案是在资源目录中<c.green>给纹理使用Xcode支持
+<c.green>这样会为有P3显示屏的设备
+<c.green>自动创建<c.green>扩展范围sRGB纹理
+<c.green>我还要说一下资源目录
+<c.green>你暂时可以
+<c.green>把图标和图片
+<c.green>放到Xcode项目的资源目录中
+<c.green>去年 我们引入了应用瘦身
+<c.green>借此可以基于设备性能
+<c.green>为不同的设备创建专用版本
+<c.green>比如内存量、图形特征集
+<c.green>或设备类型
+<c.green>无论是iPad、Mac或<c.green>TV或watch...
+<c.green>当然还有手机
+<c.green>下载应用后
+<c.green>你只下载和安装了
+<c.green>专为该设备开发的单一版本
+<c.green>有指定的功能
+<c.green>在线路传输中和设备上<c.green>压缩了资产
+<c.green>节省了用户设备上的存储空间
+<c.green>并且有不计其数的API
+<c.green>可以快速获取那些资源
+<c.green>现在 我们已经向纹理集中<c.green>添加了这些资源目录
+<c.green>这有什么用呢？
+<c.green>嗯 处理mipmap层级的存储
+<c.green>纹理不只是2D图片
+<c.green>你可以在Xcode内部<c.green>执行离线mipmap生成
+<c.green>这将自动为这个纹理<c.green>执行颜色匹配
+<c.green>因此 如果是不同的<c.green>色彩空间的广色域纹理
+<c.green>将在sRGB或
+<c.green>扩展范围sRGB色彩空间<c.green>执行色彩匹配运算
+<c.green>我认为最重要的功能是
+<c.green>可以为每种设备
+<c.green>选择最理想的像素格式
+<c.green>那么 在支持ASTC纹理压缩的<c.green>新设备上
+<c.green>我们可以使用那种格式
+<c.green>在不支持ASTC纹理压缩的老设备上
+<c.green>我们可以选择非压缩格式
+<c.green>或其他压缩格式
+<c.green>此外 我们可为有P3显示屏的设备
+<c.green>选择范围更广的色彩格式
+<c.green>这就是基本流程
+<c.green>在Xcode内创建纹理集
+<c.green>给集合分配一个名称<c.green>作为唯一标识符
+<c.green>添加一张图片
+<c.green>并基本指出将如何使用纹理
+<c.green>无论是色彩纹理<c.green>或是其他类型的数据
+<c.green>如普通地图或高度图
+<c.green>然后 创建纹理
+<c.green>Xcode会创建这个纹理<c.green>并提交给应用
+<c.green>然后 你就可以通过Xcode UI或编程
+<c.green>创建纹理集了
+<c.green>一旦设备上有了纹理
+<c.green>你就可把名称提供给MetalKit
+<c.green>MetalKit会创建一个纹理<c.green>一个Metal纹理
+<c.green>我可以跟大家一起<c.green>逐步执行这个Xcode流程
+<c.green>并向你们介绍一下这些概念
+<c.green>那么...
+<c.green>首先<c.green>在项目导航侧边栏中选择资源目录
+<c.green>然后点这里的这个加号按钮<c.green>打开这个菜单
+<c.green>这里就是你要创建<c.green>各种集合类型的地方
+<c.green>有图片集、图标集、通用数据集、
+<c.green>以及纹理集和立方体贴图纹理集
+<c.green>建好纹理集后 给它命名
+<c.green>你的命名等级<c.green>没必要非得是flat型的
+<c.green>如果你有许多叫做基础纹理的纹理
+<c.green>每个对象都有一个这样的纹理<c.green>你可以为每个对象创建一个文件夹
+<c.green>并把该对象的基础纹理<c.green>填充进相应的文件夹
+<c.green>这样可以实现非常复杂的等级
+<c.green>添加图片
+<c.green>然后设置解释
+<c.green>这里有三个选项
+<c.green>颜色 在NonPremultiplied<c.green>颜色中执行颜色匹配运算
+<c.green>NonPremultiplied<c.green>选项会在创建纹理之前
+<c.green>用RGB通道乘以alpha通道
+<c.green>这里的数据选项用于普通地图、
+<c.green>高度地图、粗度地图、<c.green>非色彩类型纹理
+<c.green>这就是你需要做的全部工作
+<c.green> Xcode将开始创建
+<c.green>这个纹理的各个版本
+<c.green>并选择最理想的像素格式
+<c.green>但是 你可以有更明确的控制
+<c.green>你可以选择许多特性
+<c.green>这些特性会打开很多bucket<c.green>可以用来自定义
+<c.green>你可以给每个版本<c.green>添加不同的图片
+<c.green>你很可能不会使用不同的图片
+<c.green>而是同一张图片的不同尺寸
+<c.green>那么在内存量大的设备上<c.green>使用较大的纹理
+<c.green>在内存量小的设备上<c.green>使用较小的纹理
+<c.green>然后<c.green>可以指定如何或是否想要mipmap
+<c.green>这个“全部”选项将会生成<c.green>mipmap 一直到1x1级
+<c.green>而“固定”选项<c.green>将提供一些更明确的控制
+<c.green>比如是否想要使用最大级
+<c.green>以及是否要给每个层级<c.green>添加不同的图片
+<c.green>最后 你可以覆盖
+<c.green>像素格式的自动选择
+<c.green>我刚才提到过<c.green>你可以用程序来创建
+<c.green>这些纹理集
+<c.green>你不见得会一步步<c.green>按照Xcode UI的流程来
+<c.green>如果你有几千个资源的话
+<c.green>那么有一个很简单的目录结构
+<c.green>在那个目录结构内有许多JSON文件
+<c.green>这些文件和目录结构
+<c.green>被完全记录在<c.green>资源目录参考上
+<c.green>你可以创建自己的<c.green>资源调节工具
+<c.green>来设置纹理集
+<c.green>在设备上获得了这个资源后<c.green>该如何使用它呢？
+<c.green>先创建一个MetalKit纹理加载器
+<c.green>填充到Metal设备中
+<c.green>然后把名称及其命名法
+<c.green>提供给纹理加载器
+<c.green>MetalKit将开始创建那个纹理
+<c.green>你可以在这里提供其他选项
+<c.green>比如比例因子 如果你有<c.green>不同版本的纹理的话
+<c.green>不同比例因子的
+<c.green>或bundle
+<c.green>如果主bundle中没有资源目录
+<c.green>你还可以指定一些选项
+<c.green>我真心希望你们能<c.green>关注一下色彩空间
+<c.green>并通过用范围更广的<c.green>色彩创建内容来分离应用
+<c.green>资源目录可以帮助你<c.green>实现那个目标
+<c.green>同样 它们还提供许多其他功能
+<c.green>你可以利用起来<c.green>比如最佳的像素格式选择
+<c.green>接下来 让我们欢迎我的同事<c.green>Anna Tikhonova上台
+<c.green>谈一谈在Metal性能着色器框架中
+<c.green>一些令人激动的改进
+<c.green>大家下午好
+<c.green>感谢Dan对我的介绍
+<c.green>Dan说过了 我叫Anna
+<c.green>我是GPU软件团队中的<c.green>一名工程师
+<c.green>让我们谈一谈<c.green>Metal性能着色器中的一些新增功能
+<c.green>去年 我们在<c.green>Metal的新特性的第二场演讲中
+<c.green>引入了Metal性能着色器框架
+<c.green>如果你没参加那场演讲<c.green>你真应该看一下视频
+<c.green>我在此只给你们一个快速简明的回顾
+<c.green>Metal性能着色器框架是
+<c.green>为Metal中的GPU
+<c.green>优化的高性能数据平行算法
+<c.green>算法是针对iOS进行优化的
+<c.green>自iOS 9起可用
+<c.green>可用于A8 现在是A9处理器
+<c.green>可以简易地把框架<c.green>整合到Metal应用中
+<c.green>用起来很简单
+<c.green>应该跟调用库函数一样简单
+<c.green>去年 我们谈到了以下这些<c.green>所支持的图像运算
+<c.green>你可从视频中获得更多详细信息和示例
+<c.green>但今年我们增加了一些更酷的东西
+<c.green>我们增加了<c.green>范围更广的颜色的转换
+<c.green>可以用来在不同的色彩空间之间
+<c.green>转换Metal纹理
+<c.green>可以在RGB、sRGB、灰度、<c.green>CMYK、C3和你定义的
+<c.green>任何色彩空间之间进行转换
+<c.green>我们还增加了高斯金字塔
+<c.green>用于在GPU上创建图片数据的多尺度呈现
+<c.green>从而启动多尺度算法
+<c.green>还可以用在常见的光流算法、
+<c.green>影像混合和优质mipmap生成中
+<c.green>最后 我们还增加了卷积神经网络<c.green>或叫做CNN
+<c.green>用于加快深度学习算法
+<c.green>这是我们今天要重点讨论的话题
+<c.green>让我们开始吧
+<c.green>首先 什么是深度学习？
+<c.green>深度学习是一种机器学习领域
+<c.green>目标就是这个问题的答案
+<c.green>机器是否可以完成<c.green>人类能够完成的任务？
+<c.green>那么<c.green>我说的是什么类型的任务呢？
+<c.green>你们每个人的口袋里<c.green>都有一部iPhone
+<c.green>今天你很可能拍了一些照片
+<c.green>我们所有人每天<c.green>都不断地暴露在图片和视频中
+<c.green>在网页上、<c.green>在新闻网站上、在社交媒体上
+<c.green>当你看到一个图片时
+<c.green>你会立即了解它所描绘的内容
+<c.green>你可以检测人脸
+<c.green>如果你认识这些人<c.green>你可以标记他们
+<c.green>你可以给这个图片添加注释
+<c.green>如果是一张图片 那没什么问题
+<c.green>但是如果有很多图片<c.green>甚至是很多很多图片呢？
+<c.green>再想象一下每天<c.green>上传到网页中的图片数量
+<c.green>没有人可以手动地<c.green>给如此多的图片添加注释
+<c.green>所以 深度学习就是为了<c.green>解决这种问题而提出的技术
+<c.green>可以用于过滤大量数据
+<c.green>并回答这样的问题
+<c.green>如 “这张图片上有谁？”<c.green>和“这张照片是哪拍的？”
+<c.green>我在这儿用了一个图片的示例
+<c.green>因为图片是可见的
+<c.green>非常适合这种类型的演讲
+<c.green>但我只想提一下
+<c.green>深度学习算法也能用于其他类型的数据
+<c.green>比如其他信号类型 如音频
+<c.green>可以进行语音识别 以及触觉<c.green>可以创建触摸感觉
+<c.green>深度学习算法有两个阶段
+<c.green>第一个阶段是训练阶段
+<c.green>让我们通过一个具体的例子来了解
+<c.green>想象一下你想训练你的系统给图片分类
+<c.green>这是一张猫的图片 这是一张狗的图片
+<c.green>这是一张兔子的图片
+<c.green>这是一项人工密集型任务
+<c.green>需要大量图片
+<c.green>手动标记并注解图片<c.green>然后划到每一个类中
+<c.green>比如 如果你想训练系统识别猫
+<c.green>你需要提供大量猫的图片
+<c.green>所有图片都被标记过<c.green>要识别兔子和你想要系统能识别的
+<c.green>其他动物也一样
+<c.green>这是个一次性的、需要大量运算的阶段
+<c.green>通常是离线实现的
+<c.green>有大量可以利用的训练包
+<c.green>训练阶段的结果是训练好的参数
+<c.green>我现在先不谈这个 稍后再谈
+<c.green>训练好的参数是下一个阶段所需要的
+<c.green>也就是推理阶段
+<c.green>这个阶段是
+<c.green>给系统提供一张之前从未见过的
+<c.green>新图片
+<c.green>它需要实时地进行归类
+<c.green>在这个例子中<c.green>系统正确地将这个图片归类到
+<c.green>猫类的图中
+<c.green>我们为推理阶段提供GPU加速
+<c.green>尤其是 我们还提供
+<c.green>为GPU创建推理网络的构建模块
+<c.green>接下来让我们谈谈什么是卷积神经网络
+<c.green>以及我们提供哪些构建模块？
+<c.green>卷积神经网络 或叫做CNN
+<c.green>是受生物学启发模拟视觉皮质
+<c.green>当我们的大脑处理视觉输入时
+<c.green>接收信息的神经元<c.green>的第一个等级
+<c.green>从视觉皮质中<c.green>对特定的边界、斑点或颜色很敏感
+<c.green>而大脑分区接下来进入视觉管道
+<c.green>响应更复杂的结构<c.green>比如面部或各种各样的动物
+<c.green>非常相似地
+<c.green>卷积神经网络组成了神经元层
+<c.green>被训练识别越来越多的复杂特征
+<c.green>所以<c.green>第一层被训练为识别低层特征
+<c.green>如边界和色块
+<c.green>随后的层被训练<c.green>识别较高层的特征
+<c.green>比如 如果我们正在做人脸检测
+<c.green>会有识别像鼻子、眼睛、<c.green>脸颊这样的特征的层
+<c.green>然后把这些特征结合到一起<c.green>最后构成人脸
+<c.green>最后几个层会结合所有已生成的信息
+<c.green>生成最终的网络输出
+<c.green>比如图片中很可能有一张人脸
+<c.green>我一直提到特征
+<c.green>可以把特征当做一种过滤器<c.green>过滤那个特征的输入
+<c.green>比如鼻子
+<c.green>如果找到那个信息 就传过来
+<c.green>如果找到那个特征
+<c.green>就把信息传给后续的层
+<c.green>当然<c.green>我们需要发现很多这样的特征
+<c.green>如果我们正在做人脸检测
+<c.green>那么<c.green>只寻找鼻子很显然是远远不够的
+<c.green>我们还需要寻找其他面部特征
+<c.green>比如脸颊、眼睛<c.green>然后把这些特征结合在一起
+<c.green>我们需要很多这样的<c.green>特征过滤器
+<c.green>这就是卷积神经网络
+<c.green>接下来谈一下<c.green>我们提供的构建模块
+<c.green>第一个构建模块是你的数据
+<c.green>我们建议使用<c.green>MPS图片和MPS临时图片
+<c.green>是我们专门<c.green>为支持卷积网络新增加的
+<c.green>它们会为数据、<c.green>为输入和中间结果
+<c.green>提供优化布局
+<c.green>可以把MPS临时图片想象成<c.green>轻量级的MPS图片
+<c.green>作用于存在时间较短的图片数据
+<c.green>MPS临时图片
+<c.green>是用Metal资源堆创建的
+<c.green>我们在第一场演讲中描述过
+<c.green>它们会标记其中一些<c.green>重复利用的缓冲内存
+<c.green>并避免资源占用过多<c.green>和重新分配纹理资源
+<c.green>目标是节约大量内存
+<c.green>并帮助管理中间资源
+<c.green>我们还提供一些层
+<c.green>用于创建推理网络
+<c.green>但你现在可能在想
+<c.green>“我如何得知<c.green>实际需要哪个构建模块
+<c.green>来创建我自己的推理网络呢？”
+<c.green>答案是训练好的参数
+<c.green>训练好的参数...
+<c.green>我在前面提到过<c.green>当我们谈到训练阶段的时候
+<c.green>训练好的参数会提供<c.green>关于如何创建推理网络的
+<c.green>完整方法
+<c.green>它们会告诉你 要有多少个层
+<c.green>是哪些层以及层出现的顺序
+<c.green>你还会得到每一层的所有特征过滤器
+<c.green>我们在底层实现了这一切
+<c.green>以便确保你用这些构建模块<c.green>创建的网络
+<c.green>在所有iOS GPU上<c.green>都有最好的性能
+<c.green>你要做的就是把你的数据<c.green>挖掘到我们提供的这个优化布局
+<c.green>并调用库函数
+<c.green>创建组成网络的层
+<c.green>现在让我们详细讨论一下<c.green>这些构建模块
+<c.green>但让我们通过一个<c.green>具体的例子来解释
+<c.green>在这个演示中
+<c.green>我有一个系统被训练为识别微笑
+<c.green>我们要实现的是系统将
+<c.green>实时检测我是否微笑
+<c.green>我先微笑 然后我再皱眉
+<c.green>你将看到系统会给出正确的报告
+<c.green>微笑
+<c.green>没微笑
+<c.green>微笑
+<c.green>没微笑
+<c.green>好了
+<c.green>这就是我的演示
+<c.green>好了 现在让我们来看看
+<c.green>要创建这种网络所需要的构建模块
+<c.green>我们要谈到的第一个构建模块是卷积层
+<c.green>是卷积神经网络中的核心构建模块
+<c.green>它的目标是识别特征并输入
+<c.green>之所以叫卷积层
+<c.green>是因为它会对输入执行卷积运算
+<c.green>让我们回想一下常规的<c.green>卷积运算是如何计算的
+<c.green>你有输入和输出
+<c.green>在这个例子中是一个<c.green>5x5像素的过滤器 有一些重量
+<c.green>为了在输出中计算这个像素的值
+<c.green>你需要用输入卷积过滤器
+<c.green>非常简单
+<c.green>卷积层
+<c.green>是常规卷积运算的一个泛指
+<c.green>你可以使用多个过滤器
+<c.green>不同的过滤器<c.green>独立应用于输入中
+<c.green>结果会形成不同的输出通道
+<c.green>那么 如果你有16个过滤器<c.green>意味着你将有16个输出通道
+<c.green>为了 获得这个像素的值
+<c.green>在输出的第一个通道中
+<c.green>你需要取到第一个过滤器<c.green>并用输入对它进行卷积运算
+<c.green>为了 获得这个像素的值
+<c.green>在输出的第二管道中
+<c.green>你需要取到第二个过滤器<c.green>并用输入对它进行卷积运算
+<c.green>当然 我们的示例是比较轻微的检测<c.green>我们处理的是彩色图片
+<c.green>意思是<c.green>你的输入实际上有三种独立的通道
+<c.green>正是因为卷积神经网络的<c.green>这种运行方式所导致的
+<c.green>你需要三组过滤器 每组16个
+<c.green>每种输入通道分别为一组
+<c.green>然后把不同的过滤器应用到
+<c.green>独立的输入通道
+<c.green>并把结果结合起来获得单一输出值
+<c.green>这就是如何在我们的框架中
+<c.green>创建卷积层
+<c.green>首先创建一个描述符并制定参数
+<c.green>比如过滤器的宽和高
+<c.green>然后是输入和输出通道的数量
+<c.green>然后 从描述符中创建卷积层
+<c.green>并为特征过滤器提供从训练好的
+<c.green>参数中获取的真实数据
+<c.green>我们要谈到的下一个层是汇聚层
+<c.green>汇聚层的作用是
+<c.green>逐步减少网络的空间规模
+<c.green>从而减少后续层的竞争
+<c.green>通常是在中间连续的卷积层
+<c.green>插入汇聚层
+<c.green>汇聚层的另一个作用是
+<c.green>总结或浓缩输入区中的信息
+<c.green>应该提供两种汇聚运算
+<c.green>最大值和平均值
+<c.green>在这个例子中
+<c.green>我们用了一个2x2的像素区<c.green>进行输入
+<c.green>我们取到最大值<c.green>并把它存起来作为输出
+<c.green>这是你需在Metal性能着色器<c.green>框架中使用的API
+<c.green>用于创建汇聚层
+<c.green>一般用的是最大运算
+<c.green>过滤器尺寸是2x2
+<c.green>全连接层
+<c.green>是输入的每个神经元都被连接到
+<c.green>输出的每个神经元的层
+<c.green>可以把它看作卷积层的一种特殊类型
+<c.green>过滤器的尺寸与输入尺寸相同
+<c.green>在这个例子中
+<c.green>过滤器的尺寸与输入尺寸是相同的
+<c.green>我们对它们进行了卷积运算<c.green>并获得了单一输出值
+<c.green>在这个架构中
+<c.green>卷积层和汇聚层操作的是输入分区
+<c.green>而全连接层
+<c.green>用于从所有输入中聚集信息
+<c.green>通常是网络中最末端的层之一
+<c.green>是做出最终决策的地方
+<c.green>并生成输出
+<c.green>比如图片中很可能有笑脸
+<c.green>这就是如何在Metal性能着色器
+<c.green>框架中创建全连接层
+<c.green>首先创建一个卷积描述符
+<c.green>因为这是卷积层的一个特殊类型
+<c.green>然后从这个描述符中
+<c.green>创建一个全连接层
+<c.green>我们还将提供一些其他的层
+<c.green>我在本次演讲中不会披露太多信息
+<c.green>但你们可从文档中找到相关信息
+<c.green>我们还提供神经层
+<c.green>通常跟卷积层一起结合使用
+<c.green>我们还提供SoftMax层和<c.green>normalization层
+<c.green>那么我们已经提到了所有的层
+<c.green>现在让我们来谈谈数据
+<c.green>我刚提到你应该用MPS图片
+<c.green>它们到底是什么？
+<c.green>你们中绝大多数人<c.green>都已经熟悉Metal纹理了
+<c.green>那么这就是一个<c.green>多通道的2D Metal纹理
+<c.green>每个通道对应着一个<c.green>颜色通道和alpha
+<c.green>我在之前的示例中曾提到
+<c.green>我们需要用多通道创建图片
+<c.green>比如 32个通道
+<c.green>如果我们有32个特征过滤器
+<c.green>我们需要创建<c.green>有32个通道的输出图片
+<c.green>我们该如何实现呢？
+<c.green>MPS图片
+<c.green>实际上是有多个切片的<c.green>Metal 2D数组纹理
+<c.green>当你创建MPS图片时<c.green>你真正需要注意的是
+<c.green>你正在创建有32个通道的图片
+<c.green>但有时候 你可能需要<c.green>把MPS图片数据返回到CPU
+<c.green>或者你想使用<c.green>现有的Metal 2D数组纹理
+<c.green>作为MPS图片
+<c.green>在这种情况下 你需要了解到
+<c.green>我们为你的数据<c.green>使用了特殊的打包布局
+<c.green>因此结构切片中的每个像素<c.green>都包含四个通道的数据
+<c.green>所以一张有32个通道的图片<c.green>实际应该只有八个切片
+<c.green>这是你在我们的框架中
+<c.green>创建MPS图片要使用的API
+<c.green>首先创建一个描述符
+<c.green>并制定参数 如数据格式的通道
+<c.green>图片高度和通道数量
+<c.green>然后从这个描述符中<c.green>创建一张MPS图片 非常简单
+<c.green>当然 如果输入图片的尺寸小
+<c.green>那么你可以批量处理<c.green>来更好地利用GPU
+<c.green>我们会提供一个简单的机制<c.green>来帮助你实现批量处理
+<c.green>在这个例子中 我们创建了一个<c.green>含有100张MPS图片的数组
+<c.green>那么现在 我们已经提到了所有层<c.green>也提到了数据
+<c.green>接下来 让我们看一下<c.green>要进行微笑探测
+<c.green>所需要创建的实际网络
+<c.green>我们从输入开始
+<c.green>我们将使用<c.green>我一直在提的训练好的参数
+<c.green>来帮助我们创建这个网络
+<c.green>那么 训练好的参数告诉我们
+<c.green>这个网络的第一层将是卷积层
+<c.green>输入有三个通道的图片
+<c.green>并输出有16个通道的图片
+<c.green>训练好的参数还提供
+<c.green>三组过滤器 每组16个
+<c.green>这些富有色彩的蓝色图片
+<c.green>在把过滤器应用到输入中之后
+<c.green>使输出通道变得可视化
+<c.green>下一层是汇聚层
+<c.green>通过每一个维度的两个因子
+<c.green>降低卷积层输出的空间分辨率
+<c.green>训练好的参数告诉我们<c.green>下一层
+<c.green>是另一个卷积层
+<c.green>输入有16个通道的图片
+<c.green>并输出有16个通道的图片
+<c.green>进一步缩小<c.green>下一个汇聚层的尺寸
+<c.green>以此类推 直到我们得到输出
+<c.green>正如你所看到的
+<c.green>这个网络有一连串的卷积层
+<c.green>每个卷基层后面都跟着一个汇聚层
+<c.green>最后两层实际上是全连接层
+<c.green>为网络生成最终输出
+<c.green>现在 我们已经了解这个网络<c.green>应该是个什么样的网络
+<c.green>这样的网络在为推理创建的
+<c.green>卷积神经网络中很常见
+<c.green>现在 让我们看一下<c.green>在框架中创建这种网络的代码
+<c.green>第一步是创建层
+<c.green>训练好的参数再次告诉我们说<c.green>我们需要
+<c.green>在我们的网络中 四个卷积层
+<c.green>为简单起见 我演示的代码<c.green>只创建其中一个卷基层
+<c.green>但正如你所看到的<c.green>我使用了跟我之前给你们看过的
+<c.green>完全一样的API
+<c.green>然后 我们需要创建汇聚层
+<c.green>我们只需要一个 因为我们要一直使用
+<c.green>最大运算 过滤器尺寸为2x2
+<c.green>我们还需要创建两个全连接层
+<c.green>为简单起见 我只演示一个的代码
+<c.green>现在 我们需要注意一下输入和输出
+<c.green>在这个具体的例子中
+<c.green>假设我们有一个现存的Metal应用
+<c.green>并且你有一些想
+<c.green>用在输入和输出中的纹理上
+<c.green>这就是用来创建MPS图片的API
+<c.green>最后一个阶段是从现有的Metal纹理中
+<c.green>按照训练好的参数所指定的顺序
+<c.green>把所有层编码到一个现有的命令缓冲区
+<c.green>这样 我们就有了输入和输出
+<c.green>现在 我们注意到还需要注意一件事
+<c.green>我们要把第一层的输出存起来
+<c.green>那么让我们用MPS临时图片来处理
+<c.green>这是如何创建MPS临时图片
+<c.green>正如你所看到的 类似于
+<c.green>你创建普通MPS图片的方法
+<c.green>我们要立即在第一层的编码中使用它
+<c.green>临时图片就会被清除
+<c.green>提交命令缓冲区
+<c.green>然后我们继续 创建另一张临时图片
+<c.green>来存储第二层的输出
+<c.green>以此类推 直到我们得到输出
+<c.green>就是这样
+<c.green>只需要把它们连接起来
+<c.green>层的编码顺序
+<c.green>跟我之前演示的<c.green>网络图表上的顺序完全一致
+<c.green>从输入开始 一直到输出
+<c.green>我们已经演示完了一个非常简单的例子
+<c.green>现在让我们来看一个更复杂的例子
+<c.green>我们从张量流中移植原始推理网络
+<c.green>使用Metal性能着色器框架来运行
+<c.green>这是一个很常用的推理网络
+<c.green>用于对象检测 这是完整图表
+<c.green>这个网络
+<c.green>正如你们所看到的 这个网络
+<c.green>比我刚演示的那个更复杂
+<c.green>有100多个层
+<c.green>但我想提醒一下 你们要做的
+<c.green>只是调用一些库函数来创建这些层
+<c.green>首先让我们看一下运行中的网络
+<c.green>这里我有一些不同对象的图片集
+<c.green>只要我轻触这个图片
+<c.green>我们就会实时运行推理网络
+<c.green>它将报告关于这是什么物体的<c.green>最有可能的五个猜想
+<c.green>那么最可能的猜想是一匹斑马
+<c.green>然后是一辆皮卡车
+<c.green>然后是一座火山
+<c.green>看起来很不错 当然了
+<c.green>让我们在舞台上做一个现场演示吧
+<c.green>我们要给这个水瓶拍一张照片
+<c.green>让我们用这张图片
+<c.green>水瓶
+<c.green>我想用这个现场演示告诉你们的是
+<c.green>即使是100多层的巨大网络
+<c.green>也可以用<c.green>Metal性能着色器框架实时运行
+<c.green>但这并不是全部
+<c.green>我还想要谈一下 在演示中
+<c.green>通过使用MPS临时图片节约内存
+<c.green>在这个演示的第一个版本中
+<c.green>我们用了MPS图片<c.green>来存储中间结果
+<c.green>我们最终以需要74 MPS图片结束
+<c.green>整个网络的总尺寸超过80兆
+<c.green>当然 你不必使用74张图片
+<c.green>你可以针对如何重新使用
+<c.green>这些图片提出你自己的体系
+<c.green>但这意味着需要在代码中<c.green>管理更多的内容
+<c.green>我们想确保我们的框架<c.green>尽可能地简单易用
+<c.green>所以 在演示的第二个版本中
+<c.green>我们用MPS临时图片<c.green>替换了所有MPS图片
+<c.green>这带来了一些优势
+<c.green>第一点是在时间和能源方面<c.green>减少了CPU消耗
+<c.green>但仍然创建了74张临时图片
+<c.green>只有5个底层内存分配
+<c.green>总计只有20兆多一点儿<c.green>这节省了76％的内存
+<c.green>这个数超级巨大
+<c.green>我用这两个现场演示的是
+<c.green>Metal性能着色器框架
+<c.green>为推理创建卷积神经网络
+<c.green>提供的全力支持
+<c.green>并优化了iOS GPU的使用情况
+<c.green>所以 请使用卷积神经网络
+<c.green>来建一些很酷的应用吧
+<c.green>以上就是<c.green>“Metal的新特性”演讲的全部内容
+<c.green>如果你没参加第一场演讲
+<c.green>请看一下相关视频
+<c.green>这样你就能了解这些很酷的新特性
+<c.green>如曲面细分、资源堆和无记忆渲染目标
+<c.green>以及现有工具的改进
+<c.green>在这场演讲中 我们谈了专用函数
+<c.green>和资源读写函数、白色和纹理资源、
+<c.green>Metal性能工具的新增功能
+<c.green>以及卷积神经网络的简单介绍
+<c.green>要获得关于本场演讲的更多信息<c.green>请访问这个URL
+<c.green>你可以观看视频
+<c.green>并获得相关文档和示例代码的链接
+<c.green>还有一些相关的演讲的信息
+<c.green>你总可以在线查看<c.green>过往Metal演讲的视频
+<c.green>你还可以参加
+<c.green>今天晚些时候举办的<c.green>高级Metal着色器优化演讲
+<c.green>请注意 这场演讲的地址<c.green>改为了Knob Hill
+<c.green>明天你们将有机会参加白色处理演讲
+<c.green>及神经网络和加速演讲
+<c.green>可以了解如何为CPU创建神经网络
+<c.green>使用加速框架
+<c.green>非常感谢大家来参加本场演讲<c.green>祝你们在WWDC期间度过一段美好的时光
